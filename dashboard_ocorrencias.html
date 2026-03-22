@@ -646,17 +646,19 @@ function renderRatio(){
   renderRatioTableSec(rowsSec);
   drawBarsValue('chartHrSec', rowsSec);
 
-  // Mensal
+  // Mensal — usa os meses reais do raw (não depende de DATA.ratio.mes, que pode estar vazio)
   const liqByMes = filtered.reduce((acc,r)=>{ acc[r.mes]=(acc[r.mes]||0)+(r.liq||0); return acc; }, {});
-  const meses = (DATA.ratio && DATA.ratio.mes ? DATA.ratio.mes : [])
-    .filter(x=>x.mes!=='2024-09')
-    .map(x=>{
-      const liq = liqByMes[x.mes] || 0;
-      const horas = x.horas_mes || 0;
+  const horasByMes = {};
+  (DATA.ratio && DATA.ratio.mes ? DATA.ratio.mes : []).forEach(x=>{ horasByMes[x.mes] = x.horas_mes || 0; });
+  const meses = Array.from(new Set(DATA.raw.map(r=>r.mes)))
+    .filter(m => m && m !== '2024-09')
+    .sort()
+    .map(m=>{
+      const liq = liqByMes[m] || 0;
+      const horas = horasByMes[m] || 0;
       const ratio = horas>0 ? (liq/horas) : 0;
-      return {mes:x.mes, label:x.mes, value:ratio};
-    })
-    .sort((a,b)=> (a.mes<b.mes?-1:1));
+      return {mes:m, label:m, value:ratio};
+    });
   drawBarsValue('chartHrMes', meses);
 }
 
