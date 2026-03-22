@@ -642,7 +642,9 @@ function renderRatio(){
     if (_pRef) {
       const _mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       const _p = _pRef.split('-');
-      _elPRef.textContent = '(horas acum. até ' + (_mn[parseInt(_p[1])-1] || _p[1]) + '/' + _p[0] + ')';
+      const _nPer = DATA.ratio.periodos_sec ? DATA.ratio.periodos_sec.length : 1;
+      const _pfx = _nPer > 1 ? 'horas acum. até ' : 'horas de ';
+      _elPRef.textContent = '(' + _pfx + (_mn[parseInt(_p[1])-1] || _p[1]) + '/' + _p[0] + ')';
     } else { _elPRef.textContent = ''; }
   }
   // somas por secção — usa dados filtrados (independente de DATA.ratio.sec)
@@ -667,18 +669,20 @@ function renderRatio(){
     : rowsSec.map(function(r){ return {sec:r.sec, label:r.label, value:r.liq, horas:0, liq:r.liq, valSuffix:' €'}; });
   drawBarsValue('chartHrSec', chartSecRows);
 
-  // Mensal — usa os meses reais do raw (não depende de DATA.ratio.mes, que pode estar vazio)
+  // Mensal — apenas meses com dados de horas exportados (ratio.mes)
   const liqByMes = filtered.reduce((acc,r)=>{ acc[r.mes]=(acc[r.mes]||0)+(r.liq||0); return acc; }, {});
   const horasByMes = {};
-  (DATA.ratio && DATA.ratio.mes ? DATA.ratio.mes : []).forEach(x=>{ horasByMes[x.mes] = x.horas_mes || 0; });
-  const meses = Array.from(new Set(filtered.map(r=>r.mes)))
-    .filter(m => m && m !== '2024-09')
+  const _mesArr = DATA.ratio && DATA.ratio.mes
+    ? (Array.isArray(DATA.ratio.mes) ? DATA.ratio.mes : [DATA.ratio.mes])
+    : [];
+  _mesArr.forEach(x=>{ if(x.horas_mes > 0) horasByMes[x.mes] = x.horas_mes; });
+  const meses = Object.keys(horasByMes)
     .sort()
-    .map(m=>{
+    .map(m => {
       const liq = liqByMes[m] || 0;
-      const horas = horasByMes[m] || 0;
-      const ratio = horas>0 ? (liq/horas) : 0;
-      return {mes:m, label:m, value:ratio};
+      const horas = horasByMes[m];
+      const ratio = liq / horas;
+      return {mes: m, label: m, value: ratio};
     });
   drawBarsValue('chartHrMes', meses);
 }
