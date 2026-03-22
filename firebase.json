@@ -1,0 +1,27 @@
+{
+  "hosting": {
+    "site": "dashboard-ocorrencias",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".git",
+      ".gitignore"
+    ],
+    "rewrites": [
+      {
+        "source": "/",
+        "destination": "/dashboard_ocorrencias.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/*.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      },
+      {
+        "source": "**/*.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+      }
+    ]
+  }
+}
