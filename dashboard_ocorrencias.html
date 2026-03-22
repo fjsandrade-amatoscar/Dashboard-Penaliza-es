@@ -199,7 +199,7 @@ header h1{font-size:26px !important;font-weight:700 !important;margin:0 8px 0 0}
 <section id="tab-hora" style="display:none">
   <div class="grid-2">
     <div class="panel">
-      <h4>Ratio (€ líquido / hora) por Secção</h4>
+      <h4>Ratio (€ líquido / hora) por Secção <small id="ratioPeriodoRef" style="font-weight:normal;color:var(--muted);font-size:0.8em"></small></h4>
       <div id="ratioTableSec"></div>
     </div>
     <div class="panel">
@@ -635,6 +635,16 @@ function renderRatioTableSec(rows){
 
 function renderRatio(){
   const filtered = applyFilters(DATA.raw);
+  // Label do período de referência das horas
+  const _elPRef = document.getElementById('ratioPeriodoRef');
+  if (_elPRef) {
+    const _pRef = DATA.ratio && DATA.ratio.periodo_ref;
+    if (_pRef) {
+      const _mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const _p = _pRef.split('-');
+      _elPRef.textContent = '(horas acum. até ' + (_mn[parseInt(_p[1])-1] || _p[1]) + '/' + _p[0] + ')';
+    } else { _elPRef.textContent = ''; }
+  }
   // somas por secção — usa dados filtrados (independente de DATA.ratio.sec)
   const liqBySec = filtered.reduce((acc,r)=>{ acc[r.sec]=(acc[r.sec]||0)+(r.liq||0); return acc; }, {});
   // Horas por secção: de DATA.ratio.sec quando disponível (integração futura com kpi-export)
