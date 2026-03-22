@@ -671,7 +671,7 @@ function renderRatio(){
   const liqByMes = filtered.reduce((acc,r)=>{ acc[r.mes]=(acc[r.mes]||0)+(r.liq||0); return acc; }, {});
   const horasByMes = {};
   (DATA.ratio && DATA.ratio.mes ? DATA.ratio.mes : []).forEach(x=>{ horasByMes[x.mes] = x.horas_mes || 0; });
-  const meses = Array.from(new Set(DATA.raw.map(r=>r.mes)))
+  const meses = Array.from(new Set(filtered.map(r=>r.mes)))
     .filter(m => m && m !== '2024-09')
     .sort()
     .map(m=>{
@@ -705,7 +705,14 @@ document.getElementById('csvAgg').addEventListener('click', ()=>{
 function toCSV(rows){ if(!rows.length)return''; const cols=Object.keys(rows[0]); const head=cols.join(';'); const body=rows.map(r=>cols.map(c=>String(r[c]??'').replaceAll(';',',')).join(';')).join('\n'); return head+'\n'+body; }
 function download(content, filename, mime){ const blob=new Blob([content],{type:mime}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url),500); }
 
-function renderAll(){ renderAgg(); renderRatio(); renderOficina(); }
+function renderAll(){
+  const _f = applyFilters(DATA.raw);
+  document.getElementById('kpiBruto').textContent = fmtE(Math.round(_f.reduce((s,r)=>s+(r.bruto||0),0)*100)/100);
+  document.getElementById('kpiRed').textContent   = fmtE(Math.round(_f.reduce((s,r)=>s+(r.red||0),0)*100)/100);
+  document.getElementById('kpiLiq').textContent   = fmtE(Math.round(_f.reduce((s,r)=>s+(r.liq||0),0)*100)/100);
+  document.getElementById('kpiOcc').textContent   = fmtN(_f.length);
+  renderAgg(); renderRatio(); renderOficina();
+}
 
 const modal = document.getElementById('penModal');
 document.getElementById('btnPenList').addEventListener('click', ()=>{ buildPenList(); modal.style.display='flex'; });
