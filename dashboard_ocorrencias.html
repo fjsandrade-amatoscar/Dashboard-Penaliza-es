@@ -609,8 +609,8 @@ function drawBarsValue(id, items, label='€ / hora'){
     var track=document.createElement('div'); track.className='track';
     var fill=document.createElement('div'); fill.className='fill';
     var val=document.createElement('div'); val.className='val';
-    try{ val.textContent=(d.value).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})+' / h'; }
-    catch(_){ val.textContent=(d.value)+' €/h'; }
+    try{ val.textContent=(d.value).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})+(d.valSuffix!==undefined?d.valSuffix:' €/h'); }
+    catch(_){ val.textContent=(d.value)+(d.valSuffix!==undefined?d.valSuffix:' €/h'); }
     track.appendChild(fill); row.appendChild(lbl); row.appendChild(track); row.appendChild(val); el.appendChild(row);
     var pct = Math.max(0, Math.min(100, (d.value)/max*100));
     (function(fill,p){ requestAnimationFrame(function(){ fill.style.width=p+'%'; }); })(fill, pct);
@@ -626,7 +626,8 @@ function renderRatioTableSec(rows){
   const fmtH = v => (v).toLocaleString('pt-PT', { minimumFractionDigits:0, maximumFractionDigits:0 });
   const t = ['<table><thead><tr><th>Secção</th><th class="num">Horas</th><th class="num">Valor líquido (€)</th><th class="num">€/hora</th></tr></thead><tbody>'];
   rows.forEach(r=>{
-    t.push(`<tr><td>${r.sec}</td><td class="num">${fmtH(r.horas)}</td><td class="num">${fmtE(r.liq)}</td><td class="num">${fmtE(r.value)}</td></tr>`);
+    const temHoras = r.horas > 0;
+    t.push(`<tr><td>${r.sec}</td><td class="num">${temHoras ? fmtH(r.horas) : '—'}</td><td class="num">${fmtE(r.liq)}</td><td class="num">${temHoras ? fmtE(r.value) : '—'}</td></tr>`);
   });
   t.push('</tbody></table>');
   host.innerHTML = t.join('');
@@ -634,17 +635,27 @@ function renderRatioTableSec(rows){
 
 function renderRatio(){
   const filtered = applyFilters(DATA.raw);
-  // somas por secção
+  // somas por secção — usa dados filtrados (independente de DATA.ratio.sec)
   const liqBySec = filtered.reduce((acc,r)=>{ acc[r.sec]=(acc[r.sec]||0)+(r.liq||0); return acc; }, {});
-  const rowsSec = (DATA.ratio && DATA.ratio.sec ? DATA.ratio.sec : []).map(x=>{
-    const liq = liqBySec[x.sec] || 0;
-    const horas = x.horas_total || 0;
-    const ratio = horas>0 ? (liq/horas) : 0;
-    return {sec:x.sec, label:x.sec, value:ratio, horas:horas, liq:liq};
-  }).filter(r=>r.horas>0);
-  rowsSec.sort((a,b)=> (b.value)-(a.value));
+  // Horas por secção: de DATA.ratio.sec quando disponível (integração futura com kpi-export)
+  const horasBySec = {};
+  (DATA.ratio && DATA.ratio.sec ? DATA.ratio.sec : []).forEach(x=>{ horasBySec[x.sec] = x.horas_total || 0; });
+  const rowsSec = Object.keys(liqBySec)
+    .filter(sec => sec && sec !== '')
+    .map(sec => {
+      const liq = liqBySec[sec] || 0;
+      const horas = horasBySec[sec] || 0;
+      const ratio = horas > 0 ? (liq / horas) : 0;
+      return {sec: sec, label: sec, value: ratio, horas: horas, liq: liq};
+    });
+  rowsSec.sort((a,b)=> (b.liq)-(a.liq));
   renderRatioTableSec(rowsSec);
-  drawBarsValue('chartHrSec', rowsSec);
+  // Gráfico: ratio €/hora se disponível, caso contrário valor líquido
+  const temDadosHoras = rowsSec.some(r => r.horas > 0);
+  const chartSecRows = temDadosHoras
+    ? rowsSec.filter(r => r.value > 0)
+    : rowsSec.map(function(r){ return {sec:r.sec, label:r.label, value:r.liq, horas:0, liq:r.liq, valSuffix:' €'}; });
+  drawBarsValue('chartHrSec', chartSecRows);
 
   // Mensal — usa os meses reais do raw (não depende de DATA.ratio.mes, que pode estar vazio)
   const liqByMes = filtered.reduce((acc,r)=>{ acc[r.mes]=(acc[r.mes]||0)+(r.liq||0); return acc; }, {});
