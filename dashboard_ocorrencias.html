@@ -331,6 +331,7 @@ function aggregate(rows, by){
   const stripAcc = s => (s??'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const normKey=(by,val)=>{
     const raw=(val??'').toString().replace(/\u00A0/g,' ').trim().replace(/\s+/g,' ');
+    if(by==='sec') return (SEC_MAP[raw] || raw) || '—';
     if(by==='col' || by==='gav'){
       let letters = stripAcc(raw).toLowerCase().replace(/[^a-z]/g,'');
       letters = letters.replace(/i+/g,'i');
