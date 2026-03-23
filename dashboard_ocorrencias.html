@@ -199,7 +199,8 @@ header h1{font-size:26px !important;font-weight:700 !important;margin:0 8px 0 0}
 <section id="tab-hora" style="display:none">
   <div class="grid-2">
     <div class="panel">
-      <h4>Ratio (€ líquido / hora) por Secção <small id="ratioPeriodoRef" style="font-weight:normal;color:var(--muted);font-size:0.8em"></small></h4>
+      <h4>Ratio — Penalização média mensal por hora faturada <small id="ratioPeriodoRef" style="font-weight:normal;color:var(--muted);font-size:0.8em"></small></h4>
+      <p id="ratioMethodNote" style="font-size:0.78em;color:var(--muted);margin:-6px 0 10px;line-height:1.5"></p>
       <div id="ratioTableSec"></div>
     </div>
     <div class="panel">
@@ -625,7 +626,7 @@ function renderRatioTableSec(rows){
   const fmtE = v => (v).toLocaleString('pt-PT',{style:'currency',currency:'EUR'});
   const fmtN = v => (v).toLocaleString('pt-PT', { minimumFractionDigits:0, maximumFractionDigits:0 });
   const fmtH = v => (v).toLocaleString('pt-PT', { minimumFractionDigits:0, maximumFractionDigits:0 });
-  const t = ['<table><thead><tr><th>Secção</th><th class="num">Horas</th><th class="num">Valor líquido (€)</th><th class="num">€/hora</th></tr></thead><tbody>'];
+  const t = ['<table><thead><tr><th>Secção</th><th class="num">Horas méd./mês</th><th class="num">Penaliz. méd./mês (€)</th><th class="num">€/hora</th></tr></thead><tbody>'];
   rows.forEach(r=>{
     const temHoras = r.horas > 0;
     t.push(`<tr><td>${r.sec}</td><td class="num">${temHoras ? fmtH(r.horas) : '—'}</td><td class="num">${fmtE(r.liq)}</td><td class="num">${temHoras ? fmtE(r.value) : '—'}</td></tr>`);
@@ -739,46 +740,65 @@ const SEC_MAP = {
 };
 
 function renderRatio(){
-  // Comparativo por hora: penalizações sempre filtradas ao período de referência das horas (periodos_sec)
-  // O filtro global de Mês NÃO se aplica aqui — o período é determinado pelos dados de horas exportados
-  const _refPeriods = (DATA.ratio && DATA.ratio.periodos_sec && DATA.ratio.periodos_sec.length)
-    ? DATA.ratio.periodos_sec
-    : null; // null = sem restrição de mês (fallback se não há dados de horas)
+  // Opção A: penalizações = média mensal de TODOS os dados disponíveis
+  //           horas       = média mensal (horas_total acumuladas / nPeriodosSec)
+  // O filtro global de Mês NÃO se aplica à componente de horas;
+  // aplica-se às penalizações (secção, GAV, etc.) mas não ao mês.
   const filtered = (function(){
     const F_saved_mes = F.mes;
-    F.mes = ''; // desactivar filtro global de mês
+    F.mes = ''; // desactivar filtro de mês — usa todos os meses disponíveis
     let rows = applyFilters(DATA.raw);
-    F.mes = F_saved_mes; // restaurar
-    if (_refPeriods) rows = rows.filter(r => _refPeriods.includes(r.mes));
+    F.mes = F_saved_mes;
     return rows;
   })();
-  // Label do período de referência das horas
+
+  // Número de meses distintos com penalizações (para calcular média mensal)
+  const mesesPen = [...new Set(filtered.map(r => r.mes).filter(Boolean))].sort();
+  const nMeses = mesesPen.length || 1;
+  const mesesPenLabel = mesesPen.length
+    ? mesesPen[0].substring(0,7) + (mesesPen.length > 1 ? ' → ' + mesesPen[mesesPen.length-1].substring(0,7) : '')
+    : '—';
+
+  // Dados de horas: nPeriodosSec meses acumulados em ratio.sec
+  const nPeriodosSec = DATA.ratio && DATA.ratio.periodos_sec ? DATA.ratio.periodos_sec.length : 1;
+  const _pRef = DATA.ratio && DATA.ratio.periodo_ref;
+  const _mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const _pRefLabel = _pRef ? (_mn[parseInt(_pRef.split('-')[1])-1]||_pRef.split('-')[1]) + '/' + _pRef.split('-')[0] : '—';
+
+  // Atualizar label de período
   const _elPRef = document.getElementById('ratioPeriodoRef');
   if (_elPRef) {
-    const _pRef = DATA.ratio && DATA.ratio.periodo_ref;
-    if (_pRef) {
-      const _mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      const _p = _pRef.split('-');
-      const _nPer = DATA.ratio.periodos_sec ? DATA.ratio.periodos_sec.length : 1;
-      const _pfx = _nPer > 1 ? 'penalizações e horas acum. até ' : 'penalizações e horas de ';
-      _elPRef.textContent = '(' + _pfx + (_mn[parseInt(_p[1])-1] || _p[1]) + '/' + _p[0] + ')';
-    } else { _elPRef.textContent = ''; }
+    _elPRef.textContent = _pRef
+      ? `(${nMeses} meses de penalizações · horas ref. ${_pRefLabel})`
+      : '';
   }
-  // somas por secção — usa dados filtrados (independente de DATA.ratio.sec)
-  // aplica SEC_MAP para traduzir nomes específicos de marca para nomes consolidados de rentabilidade
+
+  // Nota metodológica
+  const _elNote = document.getElementById('ratioMethodNote');
+  if (_elNote) {
+    _elNote.innerHTML = `<strong>Como ler:</strong> €/hora = penalização média mensal (${nMeses} meses: ${mesesPenLabel}) ÷ horas mensais médias da secção (${nPeriodosSec} meses de faturação exportados, ref. ${_pRefLabel}).`
+      + (nMeses < 3 ? ' <em>Nota: com menos de 3 meses de penalizações este rácio pode ser pouco representativo.</em>' : '');
+  }
+
+  // Somas por secção — aplica SEC_MAP
   const liqBySec = filtered.reduce((acc,r)=>{ const _s=SEC_MAP[r.sec]||r.sec; acc[_s]=(acc[_s]||0)+(r.liq||0); return acc; }, {});
-  // Horas por secção: de DATA.ratio.sec quando disponível (integração futura com kpi-export)
+
+  // Horas médias mensais por secção = horas_total acumuladas / nPeriodosSec
   const horasBySec = {};
-  (DATA.ratio && DATA.ratio.sec ? DATA.ratio.sec : []).forEach(x=>{ horasBySec[x.sec] = x.horas_total || 0; });
+  (DATA.ratio && DATA.ratio.sec ? DATA.ratio.sec : []).forEach(x=>{
+    horasBySec[x.sec] = (x.horas_total || 0) / nPeriodosSec;
+  });
+
   const rowsSec = Object.keys(liqBySec)
     .filter(sec => sec && sec !== '')
     .map(sec => {
-      const liq = liqBySec[sec] || 0;
-      const horas = horasBySec[sec] || 0;
-      const ratio = horas > 0 ? (liq / horas) : 0;
-      return {sec: sec, label: sec, value: ratio, horas: horas, liq: liq};
+      const liqTotal = liqBySec[sec] || 0;
+      const liqMedio = Math.round(liqTotal / nMeses * 100) / 100; // média mensal
+      const horasMed = horasBySec[sec] || 0;                      // horas médias/mês
+      const ratio = horasMed > 0 ? (liqMedio / horasMed) : 0;
+      return {sec: sec, label: sec, value: ratio, horas: horasMed, liq: liqMedio, liqTotal: liqTotal};
     });
-  rowsSec.sort((a,b)=> (b.liq)-(a.liq));
+  rowsSec.sort((a,b)=> (b.liqTotal)-(a.liqTotal));
   renderRatioTableSec(rowsSec);
   // Gráfico: ratio €/hora se disponível, caso contrário valor líquido
   const temDadosHoras = rowsSec.some(r => r.horas > 0);
