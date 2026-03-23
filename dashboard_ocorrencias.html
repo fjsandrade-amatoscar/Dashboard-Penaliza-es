@@ -284,7 +284,7 @@ fetch('https://raw.githubusercontent.com/fjsandrade-amatoscar/Dashboard-Penaliza
     fillSel('fFunc', DATA.filters.funcs);
     fillSel('fArea', DATA.filters.areas);
     fillSel('fMes',  Array.from(new Set(DATA.raw.map(function(r){return r.mes;}))).sort());
-    fillSel('selOficina', DATA.filters.secs);
+    fillSel('selOficina', Array.from(new Set(DATA.filters.secs.map(function(s){ return SEC_MAP[s]||s; }))).sort(function(a,b){ return a.localeCompare(b,'pt'); }));
     renderAll();
     if(typeof initResumo==='function') initResumo();
     if(typeof populatePenDropdown==='function') populatePenDropdown();
@@ -808,7 +808,7 @@ function renderRatio(){
 function renderOficina(){
   const sel = document.getElementById('selOficina').value;
   if(!sel){ document.getElementById('tableOficina').innerHTML=''; document.getElementById('chartOficina').innerHTML=''; return; }
-  const rows = applyFilters(DATA.raw).filter(r=>r.sec===sel);
+  const rows = applyFilters(DATA.raw).filter(r=>(SEC_MAP[r.sec]||r.sec)===sel);
   let agg = aggregate(rows, 'desc'); agg.sort((a,b)=> (b.liq)-(a.liq)); agg = agg.slice(0, 30);
   const t = ['<table><thead><tr><th>Tipo de ocorrência</th><th class="num">Valor líquido</th><th class="num">Bruto</th><th class="num">Redução</th><th class="num">Ocorr.</th></tr></thead><tbody>'];
   agg.forEach(r=> t.push(`<tr><td>${r.label}</td><td class="num">${fmtE(r.liq)}</td><td class="num">${fmtE(r.bruto)}</td><td class="num">${fmtE(r.red)}</td><td class="num">${fmtN(r.occs)}</td></tr>`));
