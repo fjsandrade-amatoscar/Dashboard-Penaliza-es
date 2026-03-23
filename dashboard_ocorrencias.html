@@ -738,7 +738,19 @@ const SEC_MAP = {
 };
 
 function renderRatio(){
-  const filtered = applyFilters(DATA.raw);
+  // Comparativo por hora: penalizações sempre filtradas ao período de referência das horas (periodos_sec)
+  // O filtro global de Mês NÃO se aplica aqui — o período é determinado pelos dados de horas exportados
+  const _refPeriods = (DATA.ratio && DATA.ratio.periodos_sec && DATA.ratio.periodos_sec.length)
+    ? DATA.ratio.periodos_sec
+    : null; // null = sem restrição de mês (fallback se não há dados de horas)
+  const filtered = (function(){
+    const F_saved_mes = F.mes;
+    F.mes = ''; // desactivar filtro global de mês
+    let rows = applyFilters(DATA.raw);
+    F.mes = F_saved_mes; // restaurar
+    if (_refPeriods) rows = rows.filter(r => _refPeriods.includes(r.mes));
+    return rows;
+  })();
   // Label do período de referência das horas
   const _elPRef = document.getElementById('ratioPeriodoRef');
   if (_elPRef) {
@@ -747,7 +759,7 @@ function renderRatio(){
       const _mn = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       const _p = _pRef.split('-');
       const _nPer = DATA.ratio.periodos_sec ? DATA.ratio.periodos_sec.length : 1;
-      const _pfx = _nPer > 1 ? 'horas acum. até ' : 'horas de ';
+      const _pfx = _nPer > 1 ? 'penalizações e horas acum. até ' : 'penalizações e horas de ';
       _elPRef.textContent = '(' + _pfx + (_mn[parseInt(_p[1])-1] || _p[1]) + '/' + _p[0] + ')';
     } else { _elPRef.textContent = ''; }
   }
