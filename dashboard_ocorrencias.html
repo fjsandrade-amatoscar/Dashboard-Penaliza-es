@@ -244,6 +244,21 @@ header h1{font-size:26px !important;font-weight:700 !important;margin:0 8px 0 0}
 const fmtE = v => (v).toLocaleString('pt-PT',{style:'currency',currency:'EUR'});
 const fmtN = v => (v).toLocaleString('pt-PT');
 function fillSel(id, arr){ const sel=document.getElementById(id); arr.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); }); }
+function normPenDesc(s){ return (s||'').toString().replace(/\u00A0/g,' ').trim().replace(/\s+/g,' '); }
+function uniquePenTypes(rows){
+  const seen = new Map();
+  (rows||[]).forEach(r=>{ const d = normPenDesc(r.desc); if(d && !seen.has(d)) seen.set(d, d); });
+  return Array.from(seen.values()).sort((a,b)=> a.localeCompare(b,'pt'));
+}
+function rowMatchesPenType(r, sel){ return !sel || normPenDesc(r.desc) === normPenDesc(sel); }
+function fillResPenSelect(){
+  const sel = document.getElementById('res-pen');
+  if(!sel) return;
+  const types = (window.DATA && Array.isArray(DATA.raw)) ? uniquePenTypes(DATA.raw) : [];
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  sel.innerHTML = '<option value="">(todas)</option>' + types.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+}
+window.fillResPenSelect = fillResPenSelect;
 fetch('https://raw.githubusercontent.com/fjsandrade-amatoscar/Dashboard-Penaliza-es/main/pen-data.json')
   .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
   .then(function(json){
@@ -289,6 +304,7 @@ fetch('https://raw.githubusercontent.com/fjsandrade-amatoscar/Dashboard-Penaliza
     renderAll();
     if (typeof window.initResumo === 'function') window.initResumo();
     if (typeof window.populatePenDropdown === 'function') window.populatePenDropdown();
+    if (typeof window.fillResPenSelect === 'function') window.fillResPenSelect();
     if (document.getElementById('tab-resumo')?.style.display !== 'none' && typeof window.renderResumo === 'function') {
       setTimeout(window.renderResumo, 50);
     }
@@ -328,7 +344,7 @@ document.getElementById('topN').addEventListener('change', renderAgg);
 
 function applyFilters(rows){
   let out = rows.filter(r=>(!F.sec||r.sec===F.sec) && (!F.dep||r.dep===F.dep) && (!F.col||r.col===F.col) && (!F.gav||r.gav===F.gav) && (!F.func||r.func===F.func) && (!F.area||r.area===F.area) && (!F.mes||r.mes===F.mes));
-  if(window._penFilter) out = out.filter(r=>r.penId===window._penFilter);
+  if(window._penFilter) out = out.filter(r=> rowMatchesPenType(r, window._penFilter));
   return out;
 }
 
@@ -870,13 +886,18 @@ document.getElementById('closePen').addEventListener('click', ()=> modal.style.d
 function buildPenList(){
   const list = document.getElementById('penList'); list.innerHTML='';
   const groups = {};
-  DATA.raw.forEach(r=>{ if(!groups[r.area]) groups[r.area]=[]; if(!groups[r.area].some(x=>x.penId===r.penId)) groups[r.area].push({penId:r.penId, desc:r.desc}); });
+  DATA.raw.forEach(r=>{
+    if(!groups[r.area]) groups[r.area]=[];
+    const d = normPenDesc(r.desc);
+    if(!d || groups[r.area].some(x=>x.desc===d)) return;
+    groups[r.area].push({desc:d});
+  });
   Object.keys(groups).sort().forEach(area=>{
     const wrap=document.createElement('div'); wrap.className='areaGroup';
     const h=document.createElement('h5'); h.textContent=area; wrap.appendChild(h);
     groups[area].sort((a,b)=> a.desc.localeCompare(b.desc,'pt')).forEach(p=>{
-      const it=document.createElement('div'); it.className='penItem'; it.textContent=`${p.penId} — ${p.desc}`;
-      it.addEventListener('click',()=>{ modal.style.display='none'; window._penFilter = p.penId; currentSub='desc'; document.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active')); document.querySelector('[data-sub="desc"]').classList.add('active'); renderAll(); });
+      const it=document.createElement('div'); it.className='penItem'; it.textContent=p.desc;
+      it.addEventListener('click',()=>{ modal.style.display='none'; window._penFilter = p.desc; currentSub='desc'; document.querySelectorAll('.subtabs button').forEach(b=>b.classList.remove('active')); document.querySelector('[data-sub="desc"]').classList.add('active'); renderAll(); });
       wrap.appendChild(it);
     });
     list.appendChild(wrap);
@@ -952,7 +973,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const rkEl = document.getElementById('res-ranking'); if(rkEl) rkEl.innerHTML = rk.join('');
 
     // Evolução mensal — ocorrência (ocorrências)
-    drawLineSimpleCount('res-pen-line', monthAgg(rows, r=> !penSel || String(r.penId)===penSel));
+    drawLineSimpleCount('res-pen-line', monthAgg(rows, r=> rowMatchesPenType(r, penSel)));
 
     // Evolução mensal — colaborador (ocorrências)
     drawLineSimpleCount('res-col-line', monthAgg(rows, r=> !colSel || r.col===colSel));
@@ -970,17 +991,15 @@ document.addEventListener('DOMContentLoaded', function(){
     const all = DATA.raw || [];
     // popular selects (sempre — dados podem ter sido recarregados)
     const secs = uniq(all.map(r=>r.sec)).sort((a,b)=> a.localeCompare(b,'pt'));
-    const penMap = {}; all.forEach(r=>{ const id = String(r.penId||''); if(!id) return; if(!penMap[id] && r.desc) penMap[id] = r.desc; });
-    const pens = Object.keys(penMap).sort((a,b)=> (+a)-(+b));
     const cols = uniq(all.map(r=>r.col)).sort((a,b)=> a.localeCompare(b,'pt'));
     const selSec = document.getElementById('res-oficina');
     const selPen = document.getElementById('res-pen');
     const selCol = document.getElementById('res-col');
-    if(selSec && selPen && selCol){
+    if(selSec && selCol){
       selSec.innerHTML = '<option value=\"\">(todas)</option>' + secs.map(s=>`<option value=\"${s.replace(/"/g,'&quot;')}\">${s}</option>`).join('');
-      selPen.innerHTML = '<option value=\"\">(todas)</option>' + pens.map(p=>{ const d = penMap[p] || ''; return `<option value=\"${p}\">${p} — ${d}</option>`; }).join('');
       selCol.innerHTML = '<option value=\"\">(todos)</option>' + cols.map(c=>`<option value=\"${c.replace(/"/g,'&quot;')}\">${c}</option>`).join('');
     }
+    if (typeof window.fillResPenSelect === 'function') window.fillResPenSelect();
     if (initResumo._bound) return;
     initResumo._bound = true;
     // ações (só uma vez)
@@ -1002,25 +1021,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
 <script>
 (function(){
-  function sortCodes(a,b){
-    const ra = (a+'').match(/(\d+)([A-Za-z]*)/), rb = (b+'').match(/(\d+)([A-Za-z]*)/);
-    const na = ra ? parseInt(ra[1],10) : 999999, nb = rb ? parseInt(rb[1],10) : 999999;
-    const sa = ra ? ra[2] : '', sb = rb ? rb[2] : '';
-    return (na-nb) || sa.localeCompare(sb,'pt');
-  }
   function populatePenDropdown(){
     try{
-      if (!window.PEN_META || !PEN_META.byId) return;
-      const byId = PEN_META.byId;
-      const red = new Set(PEN_META.red || []);
+      if (typeof window.fillResPenSelect === 'function') window.fillResPenSelect();
       const sel = document.getElementById('res-pen');
       if (!sel) return;
-      const codes = Object.keys(byId).filter(k => !red.has(k)).sort(sortCodes);
-      sel.innerHTML = '<option value=\"\">(todas)</option>' + codes.map(p => {
-        const d = byId[p] || '';
-        return `<option value=\"${p}\">${p}${d ? ' — ' + d : ''}</option>`;
-      }).join('');
-      // ensure render updates after populate
       if (typeof window.renderResumo === 'function') {
         sel.removeEventListener('change', window.renderResumo);
         sel.addEventListener('change', window.renderResumo);
