@@ -305,10 +305,13 @@ document.querySelectorAll('.tabs button').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.querySelectorAll('section[id^="tab-"]').forEach(sec => sec.style.display='none');
-    document.getElementById('tab-'+tab).style.display='block';
-  });
+  const tab = btn.dataset.tab;
+  document.querySelectorAll('section[id^="tab-"]').forEach(sec => sec.style.display='none');
+  document.getElementById('tab-'+tab).style.display='block';
+  if (tab === 'resumo' && typeof window.renderResumo === 'function') {
+    setTimeout(window.renderResumo, 0);
+  }
+ });
 });
 
 let currentSub='sec';
@@ -960,6 +963,8 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function initResumo(){
+    if (initResumo._done) return;
+    initResumo._done = true;
     const all = DATA.raw || [];
     // popular selects
     const secs = uniq(all.map(r=>r.sec)).sort((a,b)=> a.localeCompare(b,'pt'));
@@ -981,9 +986,15 @@ document.addEventListener('DOMContentLoaded', function(){
     document.querySelectorAll('[data-tab="resumo"]').forEach(btnTab => {
       btnTab.addEventListener('click', renderResumo, { once:true });
     });
+    [selSec, selPen, selCol].forEach(function(sel){
+      if(!sel) return;
+      sel.addEventListener('change', renderResumo);
+    });
   }
 
- })();
+  window.initResumo = initResumo;
+  window.renderResumo = renderResumo;
+})();
 </script>
 
 <script>
@@ -1021,5 +1032,6 @@ document.addEventListener('DOMContentLoaded', function(){
   // Also repopulate when the Resumo tab is opened (in case of late scripts)
   const btn = document.querySelector('[data-tab=\"resumo\"]');
   if (btn) btn.addEventListener('click', populatePenDropdown);
+  window.populatePenDropdown = populatePenDropdown;
 })();
 </script>
