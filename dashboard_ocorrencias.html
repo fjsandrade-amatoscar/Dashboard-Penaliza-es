@@ -287,8 +287,11 @@ fetch('https://raw.githubusercontent.com/fjsandrade-amatoscar/Dashboard-Penaliza
     fillSel('fMes',  Array.from(new Set(DATA.raw.map(function(r){return r.mes;}))).sort());
     fillSel('selOficina', Array.from(new Set(DATA.filters.secs.map(function(s){ return SEC_MAP[s]||s; }))).sort(function(a,b){ return a.localeCompare(b,'pt'); }));
     renderAll();
-    if(typeof initResumo==='function') initResumo();
-    if(typeof populatePenDropdown==='function') populatePenDropdown();
+    if (typeof window.initResumo === 'function') window.initResumo();
+    if (typeof window.populatePenDropdown === 'function') window.populatePenDropdown();
+    if (document.getElementById('tab-resumo')?.style.display !== 'none' && typeof window.renderResumo === 'function') {
+      setTimeout(window.renderResumo, 50);
+    }
   })
   .catch(function(err){
     console.error('Erro ao carregar pen-data.json:', err);
@@ -309,7 +312,7 @@ document.querySelectorAll('.tabs button').forEach(btn=>{
   document.querySelectorAll('section[id^="tab-"]').forEach(sec => sec.style.display='none');
   document.getElementById('tab-'+tab).style.display='block';
   if (tab === 'resumo' && typeof window.renderResumo === 'function') {
-    setTimeout(window.renderResumo, 0);
+    setTimeout(window.renderResumo, 50);
   }
  });
 });
@@ -420,7 +423,8 @@ function drawLineSimple(id, series){
 function drawLineSimpleCount(id, series){
   const el = document.getElementById(id); if(!el) return; el.innerHTML = '';
   if(!series || !series.length){ return; }
-  const w = el.clientWidth || 980, h = el.clientHeight || 300;
+  const w = el.clientWidth > 0 ? el.clientWidth : 980;
+  const h = el.clientHeight > 0 ? el.clientHeight : 280;
   const padL=56, padR=18, padT=18, padB=36;
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS,'svg');
@@ -963,10 +967,8 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function initResumo(){
-    if (initResumo._done) return;
-    initResumo._done = true;
     const all = DATA.raw || [];
-    // popular selects
+    // popular selects (sempre — dados podem ter sido recarregados)
     const secs = uniq(all.map(r=>r.sec)).sort((a,b)=> a.localeCompare(b,'pt'));
     const penMap = {}; all.forEach(r=>{ const id = String(r.penId||''); if(!id) return; if(!penMap[id] && r.desc) penMap[id] = r.desc; });
     const pens = Object.keys(penMap).sort((a,b)=> (+a)-(+b));
@@ -975,16 +977,17 @@ document.addEventListener('DOMContentLoaded', function(){
     const selPen = document.getElementById('res-pen');
     const selCol = document.getElementById('res-col');
     if(selSec && selPen && selCol){
-      selSec.innerHTML = '<option value=\"\">(todas)</option>' + secs.map(s=>`<option>${s}</option>`).join('');
+      selSec.innerHTML = '<option value=\"\">(todas)</option>' + secs.map(s=>`<option value=\"${s.replace(/"/g,'&quot;')}\">${s}</option>`).join('');
       selPen.innerHTML = '<option value=\"\">(todas)</option>' + pens.map(p=>{ const d = penMap[p] || ''; return `<option value=\"${p}\">${p} — ${d}</option>`; }).join('');
-      selCol.innerHTML = '<option value=\"\">(todos)</option>' + cols.map(c=>`<option>${c}</option>`).join('');
+      selCol.innerHTML = '<option value=\"\">(todos)</option>' + cols.map(c=>`<option value=\"${c.replace(/"/g,'&quot;')}\">${c}</option>`).join('');
     }
-    // ações
+    if (initResumo._bound) return;
+    initResumo._bound = true;
+    // ações (só uma vez)
     const btn = document.getElementById('res-refresh');
     if(btn) btn.addEventListener('click', renderResumo);
-    // primeira renderização quando o utilizador abrir a aba
     document.querySelectorAll('[data-tab="resumo"]').forEach(btnTab => {
-      btnTab.addEventListener('click', renderResumo, { once:true });
+      btnTab.addEventListener('click', function(){ setTimeout(renderResumo, 50); });
     });
     [selSec, selPen, selCol].forEach(function(sel){
       if(!sel) return;
